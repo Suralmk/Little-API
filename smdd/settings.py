@@ -26,7 +26,7 @@ SECRET_KEY = 'django-insecure-v3+i_#1xx+xb1s)p3oq$2pxahtpzfy^cse+8x7$aa1$a+!p@%%
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ["192.168.246.77", "127.0.0.1"]
+ALLOWED_HOSTS = ["192.168.246.77", "127.0.0.1", "localhost"]
 
 
 # Application definition
@@ -43,8 +43,14 @@ INSTALLED_APPS = [
     'smddpost',
 
     'rest_framework',
+    'rest_framework_simplejwt',
     'django_filters',
-    "corsheaders"
+    "corsheaders",
+
+        'oauth2_provider',
+    'social_django',
+    'drf_social_oauth2',
+
 
 ]
 

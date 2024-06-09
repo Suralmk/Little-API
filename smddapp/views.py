@@ -13,12 +13,39 @@ from rest_framework import permissions, status, authentication, generics, parser
 from rest_framework.views import APIView
 from rest_framework.filters import SearchFilter
 from django_filters.rest_framework import DjangoFilterBackend
-
+from rest_framework.decorators import api_view
 
 from . serializers import *
 # Create your views here.
 from.models import User, Profile
 from smddpost.models import Post, Comment
+
+from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.tokens import RefreshToken
+
+class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+        profile = Profile.objects.filter(user=user).first()
+        profile_data = UserProfileSerializer(profile, context = {"request" : cls}).data
+        token["profile"] = profile_data
+        return token
+
+@api_view(["GET"])
+def index(request):
+    return Response({"Assignment": "BlackCoffer Assignment backend API"})
+
+def get_auth_for_user(user, request):
+    token =  RefreshToken.for_user(user)
+    profile = Profile.objects.filter(user=user).first()
+    profile_data = UserProfileSerializer(profile, context = {"request" : request}).data
+    token["profile"] = profile_data
+    return {
+                "access" : str(token.access_token),
+                "refresh" : str(token)
+            }
 
 #Public Users View
 class Userview (generics.ListAPIView):
@@ -28,11 +55,6 @@ class Userview (generics.ListAPIView):
     authentication_classes = [authentication.SessionAuthentication]
     filter_backends = [DjangoFilterBackend,SearchFilter ]
     search_fields = ["username"]
-
-    # def get(self, request):
-    #     current_user = request.user
-    #     serializer= self.serializer_class(current_user)
-    #     return Response(serializer.data, status=status.HTTP_200_OK)
     
 class Usersview (APIView):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
@@ -41,7 +63,23 @@ class Usersview (APIView):
         user = Profile.objects.filter(user__username=username).first()
         serializer= PublicUsersSerializer(user, context = {"request" : request})
         return Response(serializer.data, status=status.HTTP_200_OK)
+    
+class LogInView(generics.CreateAPIView):
+    permission_classes = [permissions.AllowAny]
+    serializer_class = MyTokenObtainPairSerializer 
 
+    def post(self, request):
+        email = request.data.get("email")
+        password = request.data.get("password")
+
+        if not email or not password:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
+        user = authenticate(email=email, password=password)
+        if not user:
+            return Response({"detail" : "User with these credentials does not exist!"}, status=status.HTTP_401_UNAUTHORIZED)
+        user_data = get_auth_for_user(user, request)
+        return Response(user_data, status=status.HTTP_200_OK)
+        
 class RegisterView(generics.CreateAPIView):
     permission_classes = [permissions.AllowAny]
     serializer_class = SignUpSerializer
@@ -53,29 +91,8 @@ class RegisterView(generics.CreateAPIView):
         if serializer.is_valid(raise_exception=True):
             user = serializer.create(clean_data)
             if user:
-                print(serializer.data)
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
-            
-class LoginView(generics.CreateAPIView):
-
-    permission_classes = [permissions.AllowAny]
-    authentication_classes = [authentication.SessionAuthentication]
-    serializer_class = LoginSerializer
-    queryset = User.objects.all()
-
-    def  post(self, request):
-         clean_data = request.data
-         serializer = self.get_serializer(data=clean_data)
-         if serializer.is_valid(raise_exception=True):
-             user = serializer.check_user(clean_data)
-             login(request, user)
-             return Response(serializer.data, status=status.HTTP_200_OK)
-         
-class LogoutView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-    def post(self, request):
-        logout(request)
-        return Response(status=status.HTTP_200_OK)
+                tokens = get_auth_for_user(user, request)
+                return Response(tokens, status=status.HTTP_201_CREATED)
     
 class sessionView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -252,16 +269,4 @@ class UpdatePasswordView(generics.UpdateAPIView):
         serializer = self.serializer_class(data=request.data, context={"request" : request})
         serializer.is_valid(raise_exception=True)
         return Response({"success" : "Password Updated Succesfully"})       
-
-
     
-
-        
-
-
-    
-        
-
-
-
-        

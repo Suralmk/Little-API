@@ -22,7 +22,6 @@ class SignUpSerializer(serializers.Serializer):
     username = serializers.CharField()
     password = serializers.CharField(write_only=True)
 
-
     def validate(self, attrs):
         email = attrs.get("email")
         username = attrs.get("username")
@@ -46,16 +45,10 @@ class SignUpSerializer(serializers.Serializer):
 class LoginSerializer(serializers.ModelSerializer): 
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
-    username = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = User
-        fields = ["email", "username","password"]
-
-    def get_username(self, obj):
-        user_email = obj['email']
-        user = User.objects.filter(email=user_email).first()
-        return user.username
+        fields = ["email","password"]
 
     def check_user (self, clean_data):
         user = authenticate(email=clean_data['email'], password=clean_data['password'])
@@ -180,6 +173,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source="get_full_name")
     following = serializers.SerializerMethodField(read_only=True)
     follower = serializers.SerializerMethodField(read_only=True)
+    bg_pic = serializers.ImageField()
 
     class Meta:
         model = Profile
@@ -197,6 +191,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
     
 
     def get_follower(self, obj):
+        request = self.context.get("request")
+        print(request)
         followers = obj.follower.all()
         profiles  = []
         for follower in followers:
@@ -207,6 +203,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     
     def get_photo_url(self, obj):
         request = self.context.get("request")
+        print(request)
         url = obj.fingerprint.url
         return request.build_absolute_url(url)
     
