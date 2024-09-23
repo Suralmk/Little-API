@@ -1,13 +1,8 @@
 from django.contrib.auth import get_user_model
-
-User = get_user_model()
-
 from rest_framework import serializers
-from rest_framework.exceptions import ValidationError
-
-
 from . models import Message
 
+User = get_user_model()
 
 class MessageSerializer(serializers.ModelSerializer):
     sender = serializers.CharField(source = "sender.get_full_name")
@@ -18,7 +13,6 @@ class MessageSerializer(serializers.ModelSerializer):
         fields = ["sender", "reciver", "message", "timestamp"]
 
 class MessageSendSerializer(serializers.ModelSerializer):
-
     class Meta:
         model = Message
         fields = ["reciver", "message"]

@@ -2,20 +2,14 @@ from django.contrib.auth import get_user_model, authenticate, logout
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.utils.encoding import  force_str, smart_bytes
-from django.contrib.sites.shortcuts import get_current_site
-from django.urls import reverse\
-
-
-
-User = get_user_model()
-
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError, AuthenticationFailed
-from rest_framework.response import Response
 
 from . models import Profile
-from smddpost.models import Post
+from smddpost.models import Post, Comment
 from .utils import Util
+
+User = get_user_model()
 
 class SignUpSerializer(serializers.Serializer):
     email = serializers.EmailField()
@@ -72,9 +66,7 @@ class PassswordResetSerializer(serializers.Serializer):
                     user=User.objects.get(email=email)
                     uidb64=urlsafe_base64_encode(smart_bytes(user.id))
                     token = PasswordResetTokenGenerator().make_token(user)
-                    current_site = get_current_site(request=request).domain
-                    relative_link = reverse('reset-password-confirm', kwargs={'uidb64' : uidb64, 'token':token})
-                    absurl = f'http://{current_site}{relative_link}'
+                    absurl = f'http://localhost:3000/reset-password/{uidb64}/{token}/'
                     email_body = f"Hello {user.username} \n\n Use this link bellow to reset your password \n {absurl}"
                     data = {
                         'email_body' : email_body, 
@@ -82,12 +74,9 @@ class PassswordResetSerializer(serializers.Serializer):
                         'email_subject' : 'Password Reset Request'
                         }
                     Util.send_email(data)
-
                     return super().validate(attrs)
             raise ValidationError("Email does not exist")
             
-
-
 class CreateNewPasswordSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)
     token = serializers.CharField(write_only=True)
@@ -96,6 +85,8 @@ class CreateNewPasswordSerializer(serializers.Serializer):
     class Meta:
         fields = ['password', 'token', 'uidb64']
 
+    def create(self, validated_data):
+        return validated_data
 
     def validate(self, attrs):
         try:
@@ -105,24 +96,27 @@ class CreateNewPasswordSerializer(serializers.Serializer):
 
             id = force_str(urlsafe_base64_decode(uidb64))
             user = User.objects.get(id=id)
-            print(user)
 
-            if not PasswordResetTokenGenerator().check_token(user, token=token):
-                
-               raise AuthenticationFailed("The reset link is inavalid")
-            
+            if user.provider and not user.has_usable_password():
+                pass
+            elif not PasswordResetTokenGenerator().check_token(user, token=token):
+                raise AuthenticationFailed("The reset link is invalid")
+
             user.set_password(password)
             user.save()
-            return user
-        
+
+            return super().validate(attrs)
+
+        except User.DoesNotExist:
+            raise AuthenticationFailed("User does not exist")
         except Exception as e:
-            raise AuthenticationFailed("The reset link is inavalid")
-        return super().validate(attrs)
-  
+            print(e)
+            raise AuthenticationFailed("The reset link is invalid")
+
 class ListUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ["username", "email", "admin", "active", "staff","last_login"]
+        fields = ["username", "email", "admin", "active", "staff","last_login", "premium"]
 
 class PublicUsersPostSerializer(serializers.Serializer):
     pass
@@ -132,7 +126,6 @@ class PublicUsersSerializer(serializers.Serializer):
     profile_pic = serializers.ImageField()
     bg_pic = serializers.ImageField()
     total_follower = serializers.IntegerField(source="get_total_follower")
-    # total_following = serializers.IntegerField()
     bio = serializers.CharField()
     personal_intrests = serializers.CharField()
     location = serializers.CharField()
@@ -160,12 +153,35 @@ class PublicProfileSerializer(serializers.ModelSerializer):
          model = Profile
          fields = ["username","full_name", "bio", "profile_pic", "bg_pic", "personal_intrests", "birth_date", "location" ]
 
-
      def get_photo_url(self, obj):
         request = self.context.get("request")
         url = obj.fingerprint.url
         return request.build_absolute_url(url)
+     
+class SearchSerializer(serializers.ModelSerializer):
+    username = serializers.SerializerMethodField(read_only=True)
+    class Meta:
+            model = Profile
+            fields = "__all__"
 
+    def get_username(self, obj):
+        return  str(obj.user.username)
+    
+class UsersSuggestionSerializer(serializers.ModelSerializer):
+    suggestion = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+            model = Profile
+            fields = ["suggestion"]
+    
+    def get_suggestion(self, obj):
+        request = self.context.get("request")
+        print(request.user)
+        profiles = Profile.objects.all()
+        not_following = [profile for profile in  profiles if profile is request.user.following]
+        data = PublicProfileSerializer(not_following, many=True, context = {"request" : request})
+        return {}
+    
 # Prfile Serializers
 class UserProfileSerializer(serializers.ModelSerializer):
     user = ListUserSerializer(read_only=True)
@@ -188,7 +204,6 @@ class UserProfileSerializer(serializers.ModelSerializer):
             serializer = PublicProfileSerializer(followers_profile, context={"request" : self.context.get("request")})
             profiles.append(serializer.data)
         return profiles
-    
 
     def get_follower(self, obj):
         request = self.context.get("request")
@@ -221,9 +236,15 @@ class PublicPostSerializer(serializers.ModelSerializer):
     post_url = serializers.HyperlinkedIdentityField(view_name="post-detail-view", lookup_field="id")
     comment_url = serializers.HyperlinkedIdentityField(view_name="post-comments-view", lookup_field="id")
     owner = serializers.SerializerMethodField(read_only=True)
+    total_comments = serializers.SerializerMethodField()
+    
     class Meta:
         model = Post
-        fields = "__all__"
+        fields = "__all__" 
+
+    def get_total_comments(self, obj):
+        total_comments = Comment.objects.filter(post=obj).count()
+        return  total_comments
 
     def get_owner(self, obj):
         profile = obj.profile
@@ -268,7 +289,6 @@ class PublicUsersSerializer(serializers.Serializer):
     profile_pic = serializers.ImageField()
     bg_pic = serializers.ImageField()
     total_follower = serializers.IntegerField(source="get_total_follower")
-    # total_following = serializers.IntegerField()
     bio = serializers.CharField()
     personal_intrests = serializers.CharField()
     location = serializers.CharField()
@@ -319,7 +339,6 @@ class UpdatePaswordSerializer(serializers.Serializer):
     def validate(self, attrs):
         password = attrs.get("password")
         user = self.context.get("request").user
-
         user.set_password(password)
         user.save()
         return super().validate(attrs)

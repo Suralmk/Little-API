@@ -29,7 +29,6 @@ class Post(models.Model):
     shares = models.IntegerField(default=0)
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE , related_name="post_profile" )
 
-
     def get_absolute_url(self):
         return reverse('post-details', args=[str(self.id)])
     

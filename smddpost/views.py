@@ -1,10 +1,6 @@
-from django.shortcuts import render
-from django.http import Http404
-
-from rest_framework.exceptions import ValidationError
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import permissions, authentication, generics, status, mixins, parsers
+from rest_framework import permissions, generics, status, parsers
 
 from . models import Post, Comment
 from smddapp. models import Profile
@@ -12,8 +8,7 @@ from . serializers import *
 
 # posts of the current logged in user
 class UserPostView(APIView):
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
-    authentication_classes = {authentication.SessionAuthentication}
+    permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         current_user_name = request.user.username
@@ -26,7 +21,6 @@ class UserPostView(APIView):
 # Post Detail View   
 class PostDetailView(APIView):
     permission_classes = [permissions.AllowAny]
-    authentication_classes = {authentication.SessionAuthentication}
 
     def get(self, request, id):
         post = Post.objects.filter(id=id).first()
@@ -41,11 +35,10 @@ class PostProfileViewView (APIView):
     
 class PostDeleteView(APIView):
     permission_classes = [permissions.IsAuthenticated]
-    authentication_classes = {authentication.SessionAuthentication}
 
     def delete(self, request, id):
         post = Post.objects.filter(id=id).delete()
-        return Response({"post_delete" : "post deleted succesfully"}, status=status.HTTP_200_OK)
+        return Response({"detail" : "Post deleted succesfully!"}, status=status.HTTP_200_OK)
 
 # Post create View
 class PostCreateView( generics.CreateAPIView):
@@ -56,8 +49,8 @@ class PostCreateView( generics.CreateAPIView):
     def post(self, request):
         clean_data = request.data
         profile = Profile.objects.filter(user=request.user).first()
-        
         serializer = self.serializer_class(data=clean_data, context={"request" : request})
+
         if serializer.is_valid( raise_exception=True):
             serializer.create_post(clean_data, profile)
             print("serializer not valid")
@@ -67,21 +60,19 @@ class PostCreateView( generics.CreateAPIView):
     
 class PostUpdateView( generics.CreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
-    authentication_classes = {authentication.SessionAuthentication}
 
-    def put(self, request):
-        clean_data = request.data
-        profile = Profile.objects.filter(user__username=request.user.username).first()
-        serializer = self.get_serializer(data=clean_data)
-        if serializer.is_valid( raise_exception=True):
-            serializer.create_post( clean_data, profile)
-        return Response(serializer.data)
+    def put(self, request, id):
+        data = request.data
+        post = Post.objects.filter(
+        id= id
+        ).first()
+        post.title =data['title']
+        post.caption=data['caption']
+        post.picture=data["picture"]
+        post.save()
+        return Response(status=status.HTTP_200_OK)
     
-
-"""
-Comment Views
-
-"""
+"""Comment Views"""
 class PostCommentView(APIView):
     permission_classes = [permissions.AllowAny]
     def get(self, request, id):
@@ -103,10 +94,6 @@ class PostCommentCreateView(generics.CreateAPIView):
             serializer.create_comment( clean_data, post, current_user)
         return  Response(serializer.data)
     
-class UserPostCommentDeleteView(APIView):
-    pass
-
-
 class PostLikeAddView(APIView):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
@@ -119,7 +106,6 @@ class PostLikeAddView(APIView):
         likes = post.likes.all()
         serializer =PostUserSerializer (likes, many=True)
         return Response( serializer.data, status=status.HTTP_200_OK)
-    
     
     def post(self, request, id=None):
         if id is not None:
@@ -138,12 +124,3 @@ class PostLikeAddView(APIView):
                 return Response({"detail" : "Not Found"},status=status.HTTP_404_NOT_FOUND)
         likes = post.likes.remove(request.user)
         return Response( status=status.HTTP_200_OK)
-
-
-class PostLikeRemoveView (generics.UpdateAPIView):
-    pass
-
-
-
-        
-

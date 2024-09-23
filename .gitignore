@@ -161,4 +161,5 @@ cython_debug/
 
 media/
 static/
+UserFiles/
 db.sqlite3

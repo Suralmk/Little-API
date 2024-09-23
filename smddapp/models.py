@@ -1,14 +1,11 @@
 from django.db import models
-# Create your models here
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
-import uuid
 from django.urls import reverse
 from django.utils.text import slugify
 from django.db.models.signals import post_save, post_delete
-
+from  django.utils.timezone import now
 def user_directory_path(instance, filename):
     return 'user_{0}/{1}'.format(instance.user.id, filename)
-
 
 class UserManager(BaseUserManager):
   def create_user (self, email, username, password=None, is_active=True, is_staff=False, is_admin=False):
@@ -18,9 +15,7 @@ class UserManager(BaseUserManager):
           raise ValueError("User must have password")
       if not username:
           raise ValueError("User must have username")
-
       
-
       email = self.normalize_email(email)
       user = self.model( 
           email=email,
@@ -67,6 +62,8 @@ class User(AbstractBaseUser, PermissionsMixin):
     active =  models.BooleanField(default=True)
     staff = models.BooleanField(default=False)
     admin = models.BooleanField(default=False)
+    premium = models.BooleanField(default=False)
+    provider = models.BooleanField(default=False, null=True)
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username']
@@ -75,8 +72,6 @@ class User(AbstractBaseUser, PermissionsMixin):
     def __str__(self):
         return self.email
 
-    
-    
     def get_short_name(self):
         return self.username
     
@@ -97,23 +92,24 @@ class User(AbstractBaseUser, PermissionsMixin):
     @property
     def is_active(self):
         return self.active
+    
+    @property
+    def is_premium(self):
+        return self.premium
       
-
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE ,related_name="profie_owner")
     first_name = models.CharField(max_length=100, default='Unknown', null=True, blank=True)
     last_name = models.CharField(max_length=100, default='Name', null=True, blank=True)
-    profile_pic = models.ImageField(null=True, upload_to=user_directory_path, default="default_profile.png", blank=True)
+    profile_pic = models.ImageField(null=True, upload_to=user_directory_path, default="default_profile.jpg", blank=True)
     bg_pic = models.ImageField(upload_to=user_directory_path, null=True, default="default_bg.png", blank=True)
     bio = models.CharField(max_length=200, null=True, default="", blank=True)
     location = models.CharField(max_length=100, null=True, blank=True)
-    birth_date = models.DateField(null=True, blank=True)
+    birth_date = models.DateField(null=True, blank=True, default=now())
     phone = models.CharField(max_length=13, null=True, blank=True)
     follower = models.ManyToManyField(User, related_name="following" , blank=True)
     personal_intrests = models.CharField(null=True, max_length=200, blank=True)
 
-        # print(request.user.following.all())
-        # print(" followers " + str(profile.follower.all()))
     def __str__(self):
         return self.user.username
     

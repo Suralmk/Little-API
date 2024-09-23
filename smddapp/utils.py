@@ -1,4 +1,6 @@
 from django.core.mail import EmailMessage
+import random
+import string
 
 
 class Util:
@@ -11,3 +13,12 @@ class Util:
         )
 
         email.send()
+
+
+def generate_username(first_name):
+    first_name = first_name.lower().replace(" ", "")
+    random_number = random.randint(100, 999)
+    random_letters = ''.join(random.choice(string.ascii_lowercase) for _ in range(2))
+    username = f"{first_name}{random_letters}{random_number}"
+    return username
+

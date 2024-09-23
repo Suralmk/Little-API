@@ -1,4 +1,3 @@
 from django.test import TestCase
 
-class AppTest(TestCase):
-    pass
+# Create your tests here.
